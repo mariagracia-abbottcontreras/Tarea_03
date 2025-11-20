@@ -1,0 +1,273 @@
+---
+title: "01_Tarea_03"
+output: html_document
+date: "2025-11-20"
+---
+
+
+# 0. Cargar librerías
+
+
+## 2.5 Asistencia
+
+```{r}
+asistencia <- rendimiento_2024_final |> 
+  group_by(nivel_enseñanza, tipo_dependencia) |> 
+  summarise(
+    prom_asistencia = round(mean(porc_asistencia, na.rm = T), 1),
+    n_estudiantes = n(),
+    .groups = "drop"
+  ) |> 
+  arrange(nivel_enseñanza, desc(prom_asistencia))
+```
+
+### 2,5.1 Tabla de frecuencia
+
+```{r}
+asistencia |>
+  gt() |>
+  tab_header(title = "Promedio de asistencia por nivel y dependencia | 2024") |>
+  cols_label(
+    nivel_enseñanza = "Nivel de enseñanza",
+    tipo_dependencia = "Dependencia",
+    prom_asistencia = "Promedio asistencia (%)",
+    n_estudiantes   = "N estudiantes"
+  ) |> 
+  fmt_number(columns = `n_estudiantes`, decimals = 0, use_seps = TRUE) |>
+   gtsave("../02_output/promedio_asistencia_nivel_dependencia_2024.png")
+```
+
+### 2.5.2 Gráficos para cada nivel de enseñanza
+
+```{r}
+for (nivel_actual in unique(asistencia$nivel_enseñanza)) {
+  
+  # Nombre limpio y corto para el archivo
+  nombre_archivo <- paste0("02_output/asistencia_",
+                           str_trunc(str_replace_all(nivel_actual, "[ /]", "_"), 40),
+                           ".png")
+  
+  ggplot(asistencia |> filter(nivel_enseñanza == nivel_actual),
+         aes(x = reorder(tipo_dependencia, prom_asistencia),   # ordena de mayor a menor asistencia
+             y = prom_asistencia,
+             fill = tipo_dependencia)) +
+    geom_col(width = 0.7, alpha = 0.9) +
+    geom_text(aes(label = paste0(prom_asistencia, "%")),
+              vjust = -0.6, fontface = "bold", size = 4.5, color = "black") +
+    scale_fill_manual(values = c(
+      "municipal"                      = "#3498db",
+      "particular subvencionado"       = "#2ecc71",
+      "particular pagado"              = "#e74c3c",
+      "corporacion admin. delegada"    = "#9b59b6",
+      "servicio local de educación"    = "#f1c40f"
+    )) +
+    scale_y_continuous(limits = c(0, 100),
+                       expand = expansion(mult = c(0, 0.1))) +
+    labs(title = paste("Promedio de asistencia -", nivel_actual),
+         subtitle = "Por tipo de dependencia | Año 2024",
+         x = "",
+         y = "Porcentaje de asistencia promedio") +
+    theme_minimal(base_size = 13) +
+    theme(
+      plot.title = element_text(face = "bold", size = 15),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      legend.position = "none"   # sin leyenda porque ya está en el eje x
+    )
+  
+  # Guardamos el gráfico
+  ggsave(filename = nombre_archivo, width = 11, height = 7, dpi = 300, bg = "white")
+  
+  cat("✔ Guardado:", nombre_archivo, "\n")
+}
+```
+
+
+
+## 2.6 Promedio general de notas por nivel y dependencia 
+
+### 2.6.1 Tabla de frecuencias
+
+Se calcula el promedio académico para cada combinación nivel-dependencia. Se genera una tabla resumida.
+
+```{r}
+prom_nivel_dep <- rendimiento_2024_final |> 
+group_by(nivel_enseñanza, tipo_dependencia) %>%
+  summarise(
+    promedio = round(mean(promedio, na.rm = TRUE), 1),
+    n_estudiantes = n()
+  ) %>%
+  arrange(nivel_enseñanza, tipo_dependencia)
+
+prom_nivel_dep |> 
+  gt() |> 
+  tab_header(
+    title = "Promedio general de notas por nivel de enseñanza y tipo de dependencia"
+  ) |> 
+  cols_label(
+    # Aquí pones los nombres bonitos de las columnas (en el mismo orden que aparecen)
+    nivel_enseñanza = "Nivel de enseñanza",
+    tipo_dependencia = "Dependencia",           # cambia "dependencia" si tu columna se llama diferente
+    promedio = "Promedio general",     # cambia el nombre real de tu columna
+    n_estudiantes = "N estudiantes"                    # cambia si se llama diferente (n, N, total, etc.)
+  ) |> 
+  fmt_number(
+    columns = promedio,    # la columna del promedio
+    decimals = 1                # ajusta los decimales que quieras (1 o 2 normalmente)
+  ) |> 
+  tab_options(
+    table.font.size = 13,
+    heading.title.font.size = 14,
+    heading.title.font.weight = "bold",
+    table.width = pct(80)
+  ) |> 
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels()
+  ) |> 
+  tab_style(
+    style = list(
+      cell_fill(color = "#f2f2f2"),
+      cell_text(style = "italic")
+    ),
+    locations = cells_row_groups()   # si tienes grupos, sino puedes quitar esta línea
+  ) |> 
+  # Rayas tipo "striped" y hover (efecto al pasar el mouse)
+  opt_table_lines(extent = "none") |> 
+  opt_css(
+    css = "
+      .gt_table tbody tr:hover {background-color: #f5f5f5 !important;}
+      .gt_table tbody tr:nth-child(even) {background-color: #fafafa;}
+    "
+  ) |> 
+  gtsave("../02_output/promedio_nivel_dependencia_tabla.png")
+  
+```
+
+
+
+### 2.6.2 Gráfico
+```{r}
+graf_promedios <- ggplot(prom_nivel_dep,
+                         aes(x = nivel_enseñanza,
+                             y = promedio,
+                             fill = tipo_dependencia)) +
+  geom_col(position = "dodge", width = 0.9) +
+  geom_text(aes(label = promedio),
+            position = position_dodge(width = 0.9),
+            vjust = -0.3,
+            size = 4,
+            fontface = "bold") +
+  labs(
+    title = "Promedio general de notas por nivel de enseñanza y dependencia",
+    x = "Nivel de enseñanza",
+    y = "Promedio general",
+    fill = "Tipo de dependencia",
+    caption = "Elaboración propia con datos públicos del Centro de Estudios del Ministerio de Educación"
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1, face = "bold"),
+    plot.title = element_text(size = 15, face = "bold", hjust = 0.5)
+  )
+
+
+ggsave(filename = "grafico_promedio_nivel_dependencia.png", plot = graf_promedios, path = "02_output", width = 12, height = 7, dpi = 300, bg = "white")  
+
+```
+
+
+## 2.7 Promedio general de notas por tramos según tipo de dependencia
+
+```{r}
+prom_tramos <- rendimiento_2024_final |> 
+  mutate(tramo_promedio = case_when(
+    promedio < 4.0                    ~ "Menor a 4.0 (Reprobado)",
+    promedio >= 4.0 & promedio <= 7.0 ~ "4.0 a 7.0 (Aprobado)",
+    is.na(promedio)                   ~ "Sin nota",
+    TRUE                              ~ "Otro"
+  )) |>
+  count(nivel_enseñanza, tipo_dependencia, tramo_promedio) |>
+  group_by(nivel_enseñanza, tipo_dependencia) |>
+  mutate(
+    total_grupo = sum(n),
+    porcentaje  = round(100 * n / total_grupo, 1)
+  ) |>
+  ungroup() |>
+  select(nivel_enseñanza, tipo_dependencia, tramo_promedio, n_estudiantes = n, porcentaje) |>
+  arrange(nivel_enseñanza, tipo_dependencia, desc(tramo_promedio))
+```
+
+### 2.7.1 Tabla de frecuencias
+
+```{r}
+prom_tramos %>%
+  gt() %>%
+  tab_header(
+    title = "Porcentaje de estudiantes según tramo de promedio por nivel y dependencia administrativa",
+    subtitle = "Año 2024"
+  ) %>%
+  cols_label(
+    nivel_enseñanza = "Nivel de enseñanza",
+    tipo_dependencia = "Dependencia",
+    tramo_promedio   = "Tramo de promedio",
+    n_estudiantes    = "N estudiantes",
+    porcentaje       = "Porcentaje"
+  ) %>%
+  grand_summary_rows(
+    columns = n_estudiantes,
+    fns = list(Total = ~sum(., na.rm = TRUE)),
+    formatter = fmt_number,
+    use_seps = TRUE
+  ) %>%
+  tab_options(table.font.size = 13) |> 
+  gtsave("../02_output/promedio_tramos_nivel_dependencia_2024.png")
+
+
+```
+
+
+### 2.7.2 Gráfico 
+
+Ahora para el gráfico, decidí hacer uno por cada nivel de enseñanza de modo que se puedan comparar los niveles de aprobación y reprobación según el tipo de dependencia. 
+
+
+```{r}
+for (nivel_actual in unique(prom_tramos$nivel_enseñanza)) #crea un loop para hacer un gráfico para cada nivel de enseñanza
+  {
+  
+  # Nombre limpio para el archivo (sin caracteres raros)
+  nombre_archivo <- paste0("02_output/grafico_tramos_",
+                           str_sub(str_replace_all(nivel_actual, " ", "_"), 1, 30),
+                           ".png")
+  
+  ggplot(prom_tramos |> filter(nivel_enseñanza == nivel_actual),
+         aes(x = tipo_dependencia, 
+             y = porcentaje, 
+             fill = fct_relevel(tramo_promedio, 
+                                "Menor a 4.0\n(Reprobado)",
+                                "4.0 – 7.0\n(Aprobado)"))) +
+    geom_col(position = "dodge", color = "white") +
+    geom_text(aes(label = paste0(round(porcentaje, 1), "%")),
+              position = position_dodge(width = 0.9),
+              vjust = -0.5, size = 3.5, fontface = "bold") +
+    scale_fill_manual(values = c("#27ae60", "#e74c3c"),
+                      name = "Tramo de promedio") +
+    labs(title = paste("Distribución de tramos de promedio -", nivel_actual),
+         subtitle = "Año 2024",
+         x = "Tipo de dependencia",
+         y = "Porcentaje de estudiantes") +
+    theme_minimal(base_size = 13) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          plot.title = element_text(face = "bold", size = 15),
+          legend.position = "bottom") +
+    coord_cartesian(ylim = c(0, 100))
+  
+  ggsave(filename = nombre_archivo, width = 11, height = 7, dpi = 300)
+  
+  cat("✔ Guardado:", nombre_archivo, "\n") #mensaje de que salió bien
+}
+```
+
+
+
